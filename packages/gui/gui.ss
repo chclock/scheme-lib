@@ -59,13 +59,8 @@
 	   (utils strings)
 	   )
 
-   (define lib-name
-     (case (machine-type)
-       ((arm32le) "libgui.so")
-       ((a6nt i3nt) "libgui.dll")
-       ((a6osx i3osx)  "libgui.so")
-       ((a6le i3le) "libgui.so")))
-  (define lib (load-librarys  lib-name))
+ 
+  (load-librarys "libgui")
   
   (define nil '())
 
@@ -187,7 +182,10 @@
 				  (lambda (w x y)
 				    (window-motion-event x y)
 				    ))
-
+    (glfw-set-char-callback $window
+			    (lambda (w char)
+			      (window-char-event char)))
+			      
     (glfw-set-key-callback $window
 			   (lambda (w k s a m)
 			     (window-key-event k s a m)
@@ -285,6 +283,11 @@
 	    ((view-key-event $last-focus) $last-focus keycode scancode action modifier)))
     nil)
 
+  (define (window-char-event char)
+    (if (not (null? $last-focus))
+	((view-char-event $last-focus) $last-focus char))
+    nil)
+
   (define (window-mouse-event button action mods )
    ;;(display (format "window-mouse-event ~a ~a\n" button action ))
     (if (and (= 0 button ) (= 1 action))
@@ -340,6 +343,7 @@
      (mutable mouse-event)
      (mutable motion-event)
      (mutable key-event)
+     (mutable char-event)
      (mutable focus-event)
      (mutable drag-event)
      (mutable resize-event)
@@ -367,7 +371,8 @@
 			(make-eq-hashtable) 
 			0
 			view-calc-layout :view-group
-			default-mouse-event default-motion-event default-key-event
+			default-mouse-event default-motion-event
+			default-key-event defalut-char-event
 			default-focus-event default-drag-event
 			default-resize-event default-scroll-event
 			#f #t
@@ -389,7 +394,8 @@
 			(make-eq-hashtable)
 			layout-attrib
 			view-calc-layout :view-group
-			default-mouse-event default-motion-event default-key-event
+			default-mouse-event default-motion-event
+			default-key-event defalut-char-event
 			default-focus-event default-drag-event
 			default-resize-event default-scroll-event
 			#f #t
@@ -496,6 +502,8 @@
    
       ))
 
+  (define (defalut-char-event view c)
+    nil)
   (define (default-resize-event view w h)
 
     nil)
@@ -529,7 +537,8 @@
     (let loop ((child (view-childs view)))
       (if (pair? child)
 	  (begin
-		((view-motion-event (car child)) (car child) x y)
+	    ;;(printf "~a,~a\n" x y )
+	    ((view-motion-event (car child)) (car child) x y)
 	    (loop (cdr child))
 	    )))
     nil)
@@ -794,6 +803,7 @@
 	(view-attrib-set! view 'cursor 1)
 	(view-mouse-event-set! view edit-mouse-event)
 	(view-key-event-set! view edit-key-event)
+	(view-char-event-set! view edit-char-event)
 	(view-scroll-event-set! view edit-scroll-event)
 	(view-attrib-set! view 'scroll-track-height height)
 	view) ]
@@ -803,6 +813,7 @@
 	(view-attrib-set! view 'text text)
 	(view-attrib-set! view 'cursor 1)
 	(view-mouse-event-set! view edit-mouse-event)
+	(view-char-event-set! view edit-char-event)	
 	(view-key-event-set! view edit-key-event)
 	(view-scroll-event-set! view edit-scroll-event)
 	(view-attrib-set! view 'scroll-track-height height)
@@ -817,6 +828,7 @@
 	(view-attrib-set! view 'cursor 1)
 	(view-mouse-event-set! view edit-mouse-event)
 	(view-key-event-set! view edit-key-event)
+	(view-char-event-set! view edit-char-event)
 	(view-scroll-event-set! view edit-scroll-event)
 	(view-attrib-set! view 'scroll-track-height height)
 
@@ -1133,10 +1145,32 @@
       ;;(nvg-fill vg)
       (if (procedure? click)
 	  (click view action))))
-  
+
+   (define (edit-char-event view char)
+     (display (format "   edit char=~a\n" char))
+     (let ((row (view-attrib-ref view 'cursor-row nil))
+	   (col (view-attrib-ref view 'cursor-col nil))
+	   (x (view-x view))
+	   (y (view-y view))
+	   (cursor-pos (view-attrib-ref view 'cursor-pos nil))
+	   (cx (view-attrib-ref view 'cursor-x nil))
+	   (cy (view-attrib-ref view 'cursor-y nil))
+	   (text (view-attrib-ref view 'text "")))
+       (if (number? cursor-pos)
+	   (begin
+	     (set! text (string-insert
+			 text
+			 (+ cursor-pos -1)
+			 (format "~a" (integer->char char ) ))  )
+	     (view-attrib-set! view 'text text)
+	     (cursor->position view (+ cursor-pos 1))
+
+	     )
+	   ))
+     )
   ;;edit-key-event
   (define (edit-key-event view keycode scancode action modifier )
-    (display (format "   keycode=~a action=~a\n" keycode action))
+    (display (format "   keycode=~a action=~a modifier=~a\n" keycode action modifier))
     (let ((row (view-attrib-ref view 'cursor-row nil))
 	  (col (view-attrib-ref view 'cursor-col nil))
 	   (x (view-x view))
@@ -1155,7 +1189,7 @@
        [(= keycode GLFW_KEY_BACKSPACE)
 	(set! text (string-delete text (+ cursor-pos -1)  ))
 	(view-attrib-set! view 'text text)
-	(cursor->position view (+ cursor-pos -1 ))
+	(cursor->position view (+ cursor-pos -1))
 	]
        
        [(= keycode GLFW_KEY_SPACE)
@@ -1169,15 +1203,17 @@
 	(view-attrib-set! view 'text text)
 	(cursor->position view (+ cursor-pos 1))
 	]
+       [(or (= keycode GLFW_KEY_LEFT_SHIFT) (= keycode GLFW_KEY_RIGHT_SHIFT))
+	nil
+	]
        [else
-	(if (number? cursor-pos)
-	    (begin
-	      (set! text (string-insert text (+ cursor-pos ) (format "~a" (integer->char keycode ))  ))
+	(if (and (or (= modifier  GLFW_MOD_CONTROL)  (= modifier GLFW_MOD_SUPER)) (= keycode  GLFW_KEY_V))
+	    (let ((t (glfw-get-clipboard-string $window)))
+	      (set! text (string-insert text (+ cursor-pos ) t ))
 	      (view-attrib-set! view 'text text)
-	      (cursor->position view (+ cursor-pos 1))
-
-	      )
-	     )]))
+	      (cursor->position view (+ cursor-pos (string-length t) ))
+	      ))
+	]))
     nil)
 
 
@@ -1326,7 +1362,7 @@
 
   (define (position->cursor view mx my)
      (let ((rows (cffi-alloc (* 40  3 )))
-	  (glyphs (cffi-alloc (* 20 100)))
+	  (glyphs (cffi-alloc  (string-length (view-attrib-ref view 'text )  )))
 	  (text (view-attrib-ref view 'text ))
 	  (x (view-x view))
 	  (y (view-y view))
@@ -1458,7 +1494,7 @@
   (define (cursor->position view cursor-pos)
     (if (>= cursor-pos 0)
     (let ((rows (cffi-alloc (* 40  3 )))
-	  (glyphs (cffi-alloc (* 20 100)))
+	  (glyphs (cffi-alloc (string-length (view-attrib-ref view 'text ))))
 	  (text (view-attrib-ref view 'text ))
 	  (x (view-x view))
 	  (y (view-y view))
@@ -1617,10 +1653,40 @@
     )
 
   (def-function get "getGlyphPosition" () void*)
-   
+
   (define (draw-paragraph view)
+    (let ((text (view-attrib-ref view 'text ))
+	  (lineh (cffi-alloc 8))
+	  (start 0)
+	  (end 0)
+	  (width (view-width view))
+	  (height (view-height view))
+	  (x (view-x view))
+	  (y (view-y view))
+	  (bg-color (view-attrib-ref view 'background-color nil ))
+	  (radius (view-attrib-ref view 'corner-radius 0.0))
+	  (font-size (view-attrib-ref view 'font-size 20.0))
+	  (font-face (view-attrib-ref view 'font-face "sans")))
+      (set! start (cffi-string-pointer text))
+      (set! end (+ start (string-length text ) ))
+      
+      (nvg-save vg)
+      (nvg-font-size vg font-size)
+      (nvg-font-face vg font-face)
+      (nvg-text-align vg  (+ NVG_ALIGN_LEFT NVG_ALIGN_TOP))
+      (nvg-text-metrics vg NULL NULL lineh)
+      
+      
+      (nvg-begin-path vg)
+      (nvg-fill-color vg (nvg-rgba 255 255 255 255))
+      (nvg-text-box vg x y width (view-attrib-ref view 'text "") NULL)
+      (nvg-restore vg)
+      
+      ))
+  
+  (define (draw-paragraph2 view)
     (let ((rows (cffi-alloc (* 40  3 )))
-	  (glyphs (cffi-alloc (* 1 100)))
+	  (glyphs (cffi-alloc (string-length  (view-attrib-ref view 'text ) )))
 	  (text (view-attrib-ref view 'text ))
 	  (x (view-x view))
 	  (y (view-y view))
@@ -1714,6 +1780,7 @@
       [(i3nt i3osx)
        (cffi-get-pointer (+ rows (* 24  i) (* 4 0 )))  ]
       [(a6osx a6le)
+       (cffi-get-string rows)
        (cffi-get-pointer (+ rows (* 40  i) (* 8 0 )))]))
 
   (define (nvg-text-row-end rows i)
@@ -1924,6 +1991,7 @@
       (nvg-intersect-scissor vg x y w h)
 
       (draw-paragraph view)
+    
       (nvg-restore vg)
       
       ) )

@@ -5,19 +5,89 @@
 (library (gui stb)
     (export
      stbi-load
+     load-texture
      )
-    
-    (import (scheme) (utils libutil) (cffi cffi) )
-    (define lib-name
-      (case (machine-type)
-	((arm32le) "libnanovg.so")
-	((a6nt i3nt ta6nt ti3nt)  "libnanovg.dll")
-	((a6osx i3osx ta6osx ti3osx) "libnanovg.so")
-	((a6le i3le ta6le ti3le) "libnanovg.so")))
-    
-    (define lib (load-librarys  lib-name))
-    
+
+    (import (scheme) (utils libutil) (cffi cffi) (gles gles1))
+    (load-librarys  "libgui")
+
     (def-function stbi-load
       "stbi_load" (string void* void* void* int) void*)
 
+    (define load-texture
+      (case-lambda
+       [(file)
+	(let ((w (cffi-alloc 4))
+	      (h (cffi-alloc 4))
+	      (data 0)
+	      (id 0)
+	      (text-id (cffi-alloc 4))
+	      (chanel (cffi-alloc 4)))
+	  (set! data (stbi-load file
+				w h chanel 4))
+	  ;;(printf "load=>~a ~a ~a chanel=>~a\n"
+	  ;; data
+	  ;; (cffi-get-int w)
+	  ;; (cffi-get-int h)
+	  ;; (cffi-get-int chanel))
+	  (glGenTextures 1 text-id)
+
+	  (glBindTexture GL_TEXTURE_2D (cffi-get-int text-id))
+	  (glTexImage2D GL_TEXTURE_2D
+			0 GL_RGBA
+			(cffi-get-int w )
+			(cffi-get-int h)
+			0
+			GL_RGBA
+			GL_UNSIGNED_BYTE
+			data)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_REPEAT)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_REPEAT)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_NEAREST)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_NEAREST)
+	  (set! id (cffi-get-int text-id))
+	  (cffi-free text-id)
+	  (cffi-free w)
+	  (cffi-free h)
+	  (cffi-free chanel) id)]
+       [(file info)
+	(let ((w (cffi-alloc 4))
+	      (h (cffi-alloc 4))
+	      (data 0)
+	      (id 0)
+	      (text-id (cffi-alloc 4))
+	      (chanel (cffi-alloc 4)))
+	  (set! data (stbi-load file
+				w h chanel 4))
+	  ;;(printf "load=>~a ~a ~a chanel=>~a\n"
+	  ;; data
+	  ;; (cffi-get-int w)
+	  ;; (cffi-get-int h)
+	  ;; (cffi-get-int chanel))
+	  (if (hashtable? info)
+	      (begin 
+		(hashtable-set! info 'width (fixnum->flonum (cffi-get-int w)))
+		(hashtable-set! info 'height (fixnum->flonum (cffi-get-int h)))
+		(hashtable-set! info 'chanel (cffi-get-int chanel))))
+	  (glGenTextures 1 text-id)
+
+	  (glBindTexture GL_TEXTURE_2D (cffi-get-int text-id))
+	  (glTexImage2D GL_TEXTURE_2D
+			0 GL_RGBA
+			(cffi-get-int w )
+			(cffi-get-int h)
+			0
+			GL_RGBA
+			GL_UNSIGNED_BYTE
+			data)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_S GL_REPEAT)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_WRAP_T GL_REPEAT)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MAG_FILTER GL_NEAREST)
+	  (glTexParameteri GL_TEXTURE_2D GL_TEXTURE_MIN_FILTER GL_NEAREST)
+	  (set! id (cffi-get-int text-id))
+	  (cffi-free text-id)
+	  (cffi-free w)
+	  (cffi-free h)
+	  (cffi-free chanel) id)]
+      ))
 )
